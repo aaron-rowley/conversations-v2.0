@@ -28,13 +28,13 @@ const state = {
 };
 
 const root = document;
-const view = bindListView(root, (row)=> {
-  // TODO: wire thread fetch here
+const view = bindListView(root, (row) => {
+  // TODO: wire thread fetch here (openThread(row.id))
   console.log("open thread", row.id);
 });
 
 // --- UI helpers: spinner + empty state ---
-function ensureSpinner(){
+function ensureSpinner() {
   if (document.getElementById("list-loading")) return;
   const el = document.createElement("div");
   el.id = "list-loading";
@@ -50,16 +50,16 @@ function ensureSpinner(){
   if (getComputedStyle(host).position === "static") host.style.position = "relative";
   host.appendChild(el);
 }
-function showSpinner(show=true){
+function showSpinner(show = true) {
   ensureSpinner();
   const el = document.getElementById("list-loading");
   if (el) el.style.display = show ? "flex" : "none";
 }
 
-function renderEmpty(show=true, message="No conversations found"){
+function renderEmpty(show = true, message = "No conversations found") {
   const id = "list-empty";
   let el = document.getElementById(id);
-  if (!el){
+  if (!el) {
     el = document.createElement("div");
     el.id = id;
     el.className = "text-sm text-[var(--muted)] px-4 py-6";
@@ -69,8 +69,23 @@ function renderEmpty(show=true, message="No conversations found"){
   el.style.display = show ? "block" : "none";
 }
 
+// --- helpers: dedupe on append + sync URL ---
+function mergeItems(oldItems, newItems) {
+  const seen = new Set(oldItems.map((i) => i.id));
+  const merged = oldItems.slice();
+  for (const it of newItems) if (!seen.has(it.id)) { seen.add(it.id); merged.push(it); }
+  return merged;
+}
+function syncURL() {
+  const u = new URL(location.href);
+  u.searchParams.set("tab", state.tab);
+  u.searchParams.set("channel", state.channel);
+  u.searchParams.set("q", state.q);
+  history.replaceState(null, "", u);
+}
+
 // BEGIN load() with spinner + append + empty handling
-function load(pageArg, opts = { append: false }){
+function load(pageArg, opts = { append: false }) {
   if (state.loading) return;
   state.loading = true;
   showSpinner(true);
@@ -82,49 +97,57 @@ function load(pageArg, opts = { append: false }){
     q: state.q,
     page: pageArg,
     pageSize: cfg.pageSize,
-    locationId: cfg.locationId || null
+    locationId: cfg.locationId || null,
   })
-  .then(data=>{
-    state.page       = data.page || pageArg;
-    state.totalPages = Math.max(1, data.totalPages || Math.ceil((data.total||0)/(data.perPage||cfg.pageSize)));
-    state.total      = Number.isFinite(data.total) ? data.total : (data.items||[]).length;
+    .then((data) => {
+      state.page = data.page || pageArg;
+      state.totalPages = Math.max(1, data.totalPages || Math.ceil((data.total || 0) / (data.perPage || cfg.pageSize)));
+      state.total = Number.isFinite(data.total) ? data.total : (data.items || []).length;
 
-    const newItems = Array.isArray(data.items) ? data.items : [];
-    state.items = opts.append ? state.items.concat(newItems) : newItems;
+      const newItems = Array.isArray(data.items) ? data.items : [];
+      state.items = opts.append ? mergeItems(state.items, newItems) : newItems;
 
-    view.renderItems(state.items);
+      view.renderItems(state.items);
 
-    const unread = data.countsByChannel
-      ? Object.values(data.countsByChannel).reduce((a,b)=>a+b,0)
-      : state.items.length;
-    view.setUnreadBadge(unread);
-    view.setPager({ page: state.page, totalPages: state.totalPages, total: state.total });
+      const unread = data.countsByChannel
+        ? Object.values(data.countsByChannel).reduce((a, b) => a + b, 0)
+        : state.items.length;
+      view.setUnreadBadge(unread);
+      view.setPager({ page: state.page, totalPages: state.totalPages, total: state.total });
 
-    state.empty = state.items.length === 0;
-    renderEmpty(state.empty);
-  })
-  .catch(err=>{
-    console.error(err);
-    // No pop-up; show gentle empty
-    state.items = [];
-    state.empty = true;
-    view.renderItems([]);
-    view.setPager({ page: 1, totalPages: 1, total: 0 });
-    renderEmpty(true, "No conversations found");
-  })
-  .finally(()=>{
-    state.loading = false;
-    showSpinner(false);
-  });
+      // Control buttons + sentinel using hasMore
+      if (view?.els?.next) view.els.next.disabled = !data.hasMore;
+      if (view?.els?.prev) view.els.prev.disabled = state.page <= 1;
+      const sentinel = document.getElementById("infinite-sentinel");
+      if (sentinel) sentinel.style.display = data.hasMore ? "block" : "none";
+
+      state.empty = state.items.length === 0;
+      renderEmpty(state.empty);
+    })
+    .catch((err) => {
+      console.error(err);
+      // No pop-up; show gentle empty
+      state.items = [];
+      state.empty = true;
+      view.renderItems([]);
+      view.setPager({ page: 1, totalPages: 1, total: 0 });
+      if (view?.els?.next) view.els.next.disabled = true;
+      if (view?.els?.prev) view.els.prev.disabled = true;
+      renderEmpty(true, "No conversations found");
+    })
+    .finally(() => {
+      state.loading = false;
+      showSpinner(false);
+    });
 }
 // END load()
 
 // OPTIONAL: IntersectionObserver infinite scroll
-function attachInfiniteScroll(){
+function attachInfiniteScroll() {
   if (!view?.els?.list) return;
 
   const sentinelId = "infinite-sentinel";
-  if (!document.getElementById(sentinelId)){
+  if (!document.getElementById(sentinelId)) {
     const sentinel = document.createElement("div");
     sentinel.id = sentinelId;
     sentinel.style.height = "1px";
@@ -132,55 +155,61 @@ function attachInfiniteScroll(){
   }
   const sentinel = document.getElementById(sentinelId);
 
-  const io = new IntersectionObserver((entries)=>{
-    const hit = entries.some(e => e.isIntersecting);
-    if (!hit) return;
-    if (state.loading) return;
-    if (state.page >= state.totalPages) return;
-    load(state.page + 1, { append: true });
-  }, {
-    root: view.els.list,
-    rootMargin: "0px 0px 400px 0px",
-    threshold: 0
-  });
+  const io = new IntersectionObserver(
+    (entries) => {
+      const hit = entries.some((e) => e.isIntersecting);
+      if (!hit) return;
+      if (state.loading) return;
+      if (state.page >= state.totalPages) return;
+      load(state.page + 1, { append: true });
+    },
+    {
+      root: view.els.list,
+      rootMargin: "0px 0px 400px 0px",
+      threshold: 0,
+    }
+  );
 
   io.observe(sentinel);
 }
 
 // BEGIN Events (reset items on filter/search)
-view.els.tabs.forEach(el=>{
-  el.addEventListener("click", ()=>{
+view.els.tabs.forEach((el) => {
+  el.addEventListener("click", () => {
     state.tab = el.dataset.tab;
     view.activeTabTo(state.tab);
     state.page = 1;
     state.items = [];
+    syncURL();
     load(state.page, { append: false });
   });
 });
 
-view.els.channel.addEventListener("change", e=>{
+view.els.channel.addEventListener("change", (e) => {
   state.channel = e.target.value;
   state.page = 1;
   state.items = [];
+  syncURL();
   load(state.page, { append: false });
 });
 
 let t;
-view.els.search.addEventListener("input", e=>{
+view.els.search.addEventListener("input", (e) => {
   clearTimeout(t);
-  t = setTimeout(()=>{
+  t = setTimeout(() => {
     state.q = (e.target.value || "").trim();
     state.page = 1;
     state.items = [];
+    syncURL();
     load(state.page, { append: false });
   }, 250);
 });
 // END Events
 
 // Pager buttons
-view.els.prev.onclick    = ()=> { if(state.page > 1)               load(--state.page, { append: false }); };
-view.els.next.onclick    = ()=> { if(state.page < state.totalPages) load(++state.page, { append: true  }); };
-view.els.refresh.onclick = ()=> load(state.page, { append: false });
+view.els.prev.onclick = () => { if (state.page > 1) load(--state.page, { append: false }); };
+view.els.next.onclick = () => { if (state.page < state.totalPages) load(++state.page, { append: true }); };
+view.els.refresh.onclick = () => load(state.page, { append: false });
 
 // First paint
 view.activeTabTo(state.tab);
