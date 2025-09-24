@@ -1,14 +1,15 @@
-// Parse URL params and expose defaults used across the app
+// BEGIN getConfig (replace entire function)
 export function getConfig() {
-  const p = new URLSearchParams(location.search);
+  // URL params override (e.g., ?mock=1&api=https://your.api)
+  const url = new URL(window.location.href);
+  const qp  = (k, d) => url.searchParams.get(k) ?? d;
+
   return {
-    listUrl:   p.get("listUrl") || "",
-    locationId: p.get("locationId") || "",
-    authHeader: p.get("authHeader") || "Authorization",
-    authToken: p.get("authToken") || "",
-    appKey:    p.get("appKey") || "",               // optional X-App-Key 
-    pageSize: +(p.get("pageSize") || 10),
-    defaultTab: "unread",
-    defaultChannel: "sms",
+    apiBase: qp("api", ""),          // real API base if you have one
+    useMock: qp("mock", "0") === "1",// mock mode toggle
+    pageSize: Number(qp("pageSize", 20)),
+    defaultTab: qp("tab", "unread"),
+    defaultChannel: qp("channel", "sms"),
   };
 }
+// END getConfig
