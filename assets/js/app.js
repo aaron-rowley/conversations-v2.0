@@ -1,21 +1,18 @@
+/* BEGIN FILE: assets/js/app.js */
 import { getConfig } from "./config.js";
 import { makePoster } from "./api.js";
-
-// BEGIN mock switch
-const cfg = getConfig();
-const postJSON = cfg.useMock
-  ? async (_url, _body) => (await fetch("./assets/mock/list.json")).json()
-  : makePoster(cfg);
-// END mock switch
-
 import { bindListView } from "./listView.js";
 // widgets (already uploaded)
 import "../widgets/spinner.js";
 import "../widgets/toast.js";
 import "../widgets/infiniteList.js";
 
+// Config + network poster (mock switch)
 const cfg = getConfig();
-const postJSON = makePoster(cfg);
+const postJSON = cfg.useMock
+  // When mock=1, ignore the real URL and load static JSON
+  ? async (_url, _body) => (await fetch("./assets/mock/list.json")).json()
+  : makePoster(cfg);
 
 const state = {
   tab: cfg.defaultTab,
@@ -37,19 +34,27 @@ function load(pageArg){
   state.loading = true;
 
   postJSON(cfg.listUrl, {
-    tab: state.tab, channel: state.channel, q: state.q,
-    page: pageArg, pageSize: cfg.pageSize
-  }).then(data=>{
+    tab: state.tab,
+    channel: state.channel,
+    q: state.q,
+    page: pageArg,
+    pageSize: cfg.pageSize
+  })
+  .then(data=>{
     state.page = data.page || pageArg;
     state.totalPages = Math.max(1, data.totalPages || Math.ceil((data.total||0)/(data.perPage||cfg.pageSize)));
-    view.renderItems(data.items||[]);
-    const unread = data.countsByChannel ? Object.values(data.countsByChannel).reduce((a,b)=>a+b,0) : (data.items||[]).length;
+    view.renderItems(data.items || []);
+    const unread = data.countsByChannel
+      ? Object.values(data.countsByChannel).reduce((a,b)=>a+b,0)
+      : (data.items||[]).length;
     view.setUnreadBadge(unread);
     view.setPager({ page: state.page, totalPages: state.totalPages, total: data.total||0 });
-  }).catch(err=>{
+  })
+  .catch(err=>{
     console.error(err);
-    alert("Load failed: "+(err.message||"error"));
-  }).finally(()=> state.loading = false);
+    alert("Load failed: " + (err.message || "error"));
+  })
+  .finally(()=> state.loading = false);
 }
 
 // Events
@@ -61,20 +66,29 @@ view.els.tabs.forEach(el=>{
     load(state.page);
   });
 });
+
 view.els.channel.addEventListener("change", e=>{
   state.channel = e.target.value;
   state.page = 1;
   load(state.page);
 });
-let t; view.els.search.addEventListener("input", e=>{
+
+let t;
+view.els.search.addEventListener("input", e=>{
   clearTimeout(t);
-  t = setTimeout(()=>{ state.q = (e.target.value||"").trim(); state.page=1; load(state.page); }, 250);
+  t = setTimeout(()=>{
+    state.q = (e.target.value || "").trim();
+    state.page = 1;
+    load(state.page);
+  }, 250);
 });
-view.els.prev.onclick = ()=> { if(state.page>1) load(--state.page); };
-view.els.next.onclick = ()=> { if(state.page<state.totalPages) load(++state.page); };
+
+view.els.prev.onclick  = ()=> { if(state.page > 1)                load(--state.page); };
+view.els.next.onclick  = ()=> { if(state.page < state.totalPages)  load(++state.page); };
 view.els.refresh.onclick = ()=> load(state.page);
 
 // First paint
 view.activeTabTo(state.tab);
 view.els.channel.value = state.channel;
 load(1);
+/* END FILE: assets/js/app.js */
