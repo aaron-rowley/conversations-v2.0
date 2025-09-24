@@ -38,7 +38,9 @@ function load(pageArg){
     channel: state.channel,
     q: state.q,
     page: pageArg,
-    pageSize: cfg.pageSize
+    pageSize: cfg.pageSize,
+    // 👇 ensure backend receives location
+    locationId: cfg.locationId || null
   })
   .then(data=>{
     state.page = data.page || pageArg;
