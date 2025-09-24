@@ -5,39 +5,27 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>VisQuanta — Conversations v2</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    :root{
-      --bg:#0b0b10; --card:#121218; --border:#1c1c25;
-      --text:#e9e9f2; --muted:#a0a6b3; --accent:#ff7a00;
-    }
-    body{ background:var(--bg); color:var(--text) }
-    .vq-card{ background:var(--card); border:1px solid var(--border) }
-    .vq-input{ background:#151522; border:1px solid var(--border); color:var(--text) }
-    .btn{ border:1px solid var(--border); background:#151522; color:var(--text); transition:transform .06s ease }
-    .btn:active{ transform:translateY(1px) }
-    .skeleton{ position:relative; overflow:hidden; }
-    .skeleton::after{
-      content:""; position:absolute; inset:0; transform:translateX(-100%);
-      background:linear-gradient(90deg, transparent, rgba(255,255,255,.06), transparent);
-      animation:shimmer 1.4s infinite;
-    }
-    @keyframes shimmer{100%{transform:translateX(100%)}}
-  </style>
+  <link rel="stylesheet" href="/assets/css/theme.css" />
 </head>
 <body class="min-h-screen">
   <main class="h-screen w-full p-4">
     <div class="grid grid-cols-12 gap-4 h-full">
       <!-- Left: Conversations list -->
       <section class="col-span-12 lg:col-span-4 vq-card rounded-2xl flex flex-col overflow-hidden">
-        <!-- Controls -->
+        <!-- Header -->
         <div class="px-4 py-3 border-b border-[var(--border)] flex items-center gap-2">
           <div class="font-semibold">Conversations</div>
           <div class="flex-1"></div>
           <button id="refresh" class="btn px-3 py-1.5 rounded-lg text-sm">Refresh</button>
         </div>
+
+        <!-- Controls -->
         <div class="px-4 pt-3 pb-2 space-y-3 border-b border-[var(--border)]">
           <div class="flex items-center gap-2 text-sm">
-            <button data-tab="unread" class="tab btn px-3 py-1.5 rounded-lg">Unread <span id="badge-unread" class="ml-2 text-[10px] px-2 py-0.5 rounded-full" style="background:var(--accent); color:var(--bg)">0</span></button>
+            <button data-tab="unread" class="tab btn px-3 py-1.5 rounded-lg">
+              Unread
+              <span id="badge-unread" class="ml-2 text-[10px] px-2 py-0.5 rounded-full" style="background:var(--accent); color:var(--bg)">0</span>
+            </button>
             <button data-tab="starred" class="tab btn px-3 py-1.5 rounded-lg">Starred</button>
             <button data-tab="all" class="tab btn px-3 py-1.5 rounded-lg">All</button>
             <div class="flex-1"></div>
@@ -51,9 +39,10 @@
           </div>
           <input id="search" class="vq-input w-full rounded-lg px-3 py-2 text-sm" placeholder="Search name or phone…" />
         </div>
+
         <!-- List -->
         <div id="list" class="flex-1 overflow-auto divide-y divide-[var(--border)]">
-          <!-- skeleton rows (immediate) -->
+          <!-- skeleton rows -->
           <div class="px-4 py-3 flex items-start gap-3 skeleton">
             <div class="h-8 w-8 rounded-xl bg-[#1e1e2a]"></div>
             <div class="flex-1 min-w-0">
@@ -76,6 +65,7 @@
             </div>
           </div>
         </div>
+
         <!-- Pager -->
         <div class="px-4 py-3 border-t border-[var(--border)] flex items-center justify-between">
           <button id="prev" class="btn px-3 py-1.5 rounded-lg text-sm disabled:opacity-50">Prev</button>
@@ -84,7 +74,7 @@
         </div>
       </section>
 
-      <!-- Right: Thread placeholder (we wire later) -->
+      <!-- Right: Thread placeholder -->
       <section class="col-span-12 lg:col-span-8 vq-card rounded-2xl p-6 overflow-hidden flex flex-col">
         <div class="flex items-center justify-between pb-4 border-b border-[var(--border)]">
           <div class="font-semibold">Contact</div>
@@ -97,148 +87,12 @@
     </div>
   </main>
 
-<script>
-(function(){
-  // ---------- Config via URL (with defaults) ----------
-  const p = new URLSearchParams(location.search);
-  const CFG = {
-    listUrl:  p.get("listUrl")  || "",                     // n8n webhook
-    locationId: p.get("locationId") || "",                 // GHL macro
-    authHeader: p.get("authHeader") || "Authorization",
-    authToken:  p.get("authToken")  || "",
-    appKey:     p.get("appKey")     || "",                 // optional X-App-Key short-term
-    pageSize: +(p.get("pageSize") || 10),
-    // hard defaults for first paint:
-    defaultTab:     "unread",
-    defaultChannel: "sms"
-  };
-
-  // ---------- Elements ----------
-  const listEl   = document.getElementById("list");
-  const pageEl   = document.getElementById("page");
-  const pagesEl  = document.getElementById("pages");
-  const totalEl  = document.getElementById("total");
-  const badgeUnr = document.getElementById("badge-unread");
-  const searchEl = document.getElementById("search");
-  const chanEl   = document.getElementById("channel");
-  const prevEl   = document.getElementById("prev");
-  const nextEl   = document.getElementById("next");
-  const refreshEl= document.getElementById("refresh");
-  const tabEls   = Array.from(document.querySelectorAll(".tab"));
-
-  // ---------- State ----------
-  let tab = CFG.defaultTab;          // unread | starred | all
-  let channel = CFG.defaultChannel;  // sms | fb | ig | email | ""
-  let q = "";
-  let page = 1, totalPages = 1, total = 0;
-  let loading = false;
-
-  // Set initial control states (don’t wait for data)
-  chanEl.value = channel;
-  tabEls.find(t => t.dataset.tab === tab)?.classList.add("ring-1","ring-[var(--accent)]");
-
-  // ---------- Helpers ----------
-  function headers(){
-    const h = {"Content-Type":"application/json"};
-    if (CFG.authToken) h[CFG.authHeader] = CFG.authToken;
-    if (CFG.appKey) h["X-App-Key"] = CFG.appKey;
-    return h;
-  }
-  function postJSON(url, body){
-    if (!url) throw new Error("Missing listUrl");
-    return fetch(url, {
-      method:"POST",
-      headers: headers(),
-      body: JSON.stringify({ locationId: CFG.locationId, ...body }),
-    }).then(r=>{ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); });
-  }
-  const esc = s => String(s||"").replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[c]));
-  const timeAgo = iso => {
-    if(!iso) return "";
-    const t = Date.parse(iso), d = Math.max(0, Date.now()-t);
-    const m = Math.floor(d/60000), h = Math.floor(m/60), D = Math.floor(h/24);
-    if(m<1) return "now"; if(m<60) return `${m}m`; if(h<24) return `${h}h`; return `${D}d`;
-  };
-
-  function renderItems(items){
-    listEl.innerHTML = "";
-    items.forEach(it=>{
-      const row = document.createElement("button");
-      row.className = "w-full text-left px-4 py-3 transition flex gap-3 items-start hover:bg-[#161621]";
-      row.onclick = () => {/* later: fetchThread(it.id) */};
-
-      const initials = (it.initials || (it.name||"VQ").split(" ").slice(0,2).map(s=>s[0]?.toUpperCase()).join("")) || "VQ";
-      row.innerHTML = `
-        <div class="h-8 w-8 rounded-xl flex items-center justify-center text-xs font-semibold" style="background:#202030">${esc(initials)}</div>
-        <div class="flex-1 min-w-0">
-          <div class="flex items-center justify-between gap-3">
-            <div class="font-medium truncate">${esc(it.name||"Conversation")}</div>
-            <div class="text-[10px] text-[var(--muted)] whitespace-nowrap">${esc(it.lastMessageAgo || timeAgo(it.lastMessageAt))}</div>
-          </div>
-          <div class="text-sm text-[var(--muted)] truncate">${esc(it.previewShort || it.preview || "")}</div>
-        </div>
-        ${it.unreadCount ? `<span class="ml-2 text-[10px] px-2 py-0.5 rounded-full" style="background:var(--accent); color:var(--bg)">${it.unreadCount}</span>` : ""}
-      `;
-      listEl.appendChild(row);
-    });
-  }
-
-  function load(pageArg){
-    if(loading) return;
-    loading = true;
-
-    // keep skeleton visible if first load (we only replace when data arrives)
-    postJSON(CFG.listUrl, {
-      tab, channel, q, page: pageArg, pageSize: CFG.pageSize
-    }).then(data=>{
-      page        = data.page || pageArg;
-      totalPages  = Math.max(1, data.totalPages || Math.ceil((data.total||0)/(data.perPage||CFG.pageSize)));
-      total       = data.total || 0;
-      renderItems(data.items||[]);
-      // update header counters
-      const unread = data.countsByChannel ? Object.values(data.countsByChannel).reduce((a,b)=>a+b,0) : (data.items||[]).length;
-      badgeUnr.textContent = unread;
-
-      // pager
-      pageEl.textContent  = String(page);
-      pagesEl.textContent = String(totalPages);
-      totalEl.textContent = String(total);
-      prevEl.disabled = page<=1;
-      nextEl.disabled = page>=totalPages;
-    }).catch(err=>{
-      listEl.innerHTML = `<div class="p-4 text-red-400 text-sm">Failed to load list: ${esc(err.message||"Error")}</div>`;
-    }).finally(()=> loading = false);
-  }
-
-  // ---------- Events ----------
-  document.querySelectorAll(".tab").forEach(el=>{
-    el.addEventListener("click", ()=>{
-      document.querySelectorAll(".tab").forEach(t=>t.classList.remove("ring-1","ring-[var(--accent)]"));
-      el.classList.add("ring-1","ring-[var(--accent)]");
-      tab = el.dataset.tab;
-      page = 1;
-      load(page);
-    });
-  });
-
-  chanEl.addEventListener("change", e=>{
-    channel = e.target.value;
-    page = 1;
-    load(page);
-  });
-
-  let tSearch; searchEl.addEventListener("input", e=>{
-    clearTimeout(tSearch);
-    tSearch = setTimeout(()=>{ q = (e.target.value||"").trim(); page=1; load(page); }, 250);
-  });
-
-  prevEl.onclick = ()=> { if(page>1) load(--page); };
-  nextEl.onclick = ()=> { if(page<totalPages) load(++page); };
-  refreshEl.onclick = ()=> load(page);
-
-  // ---------- First paint ----------
-  load(1);
-})();
-</script>
+  <!-- App (ESM) -->
+  <script type="module">
+    import "/assets/widgets/spinner.js";
+    import "/assets/widgets/toast.js";
+    import "/assets/widgets/infiniteList.js";
+    import "/assets/js/app.js";
+  </script>
 </body>
 </html>
