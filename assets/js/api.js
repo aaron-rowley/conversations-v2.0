@@ -1,1 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>VisQuanta — Conversations v2</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/assets/css/theme.css" />
+</head>
+<body class="min-h-screen">
+  <main class="h-screen w-full p-4">
+    <div class="grid grid-cols-12 gap-4 h-full">
+      <!-- Left: Conversations list -->
+      <section class="col-span-12 lg:col-span-4 vq-card rounded-2xl flex flex-col overflow-hidden">
+        <!-- Header -->
+        <div class="px-4 py-3 border-b border-[var(--border)] flex items-center gap-2">
+          <div class="font-semibold">Conversations</div>
+          <div class="flex-1"></div>
+          <button id="refresh" class="btn px-3 py-1.5 rounded-lg text-sm">Refresh</button>
+        </div>
 
+        <!-- Controls -->
+        <div class="px-4 pt-3 pb-2 space-y-3 border-b border-[var(--border)]">
+          <div class="flex items-center gap-2 text-sm">
+            <button data-tab="unread" class="tab btn px-3 py-1.5 rounded-lg">
+              Unread
+              <span id="badge-unread" class="ml-2 text-[10px] px-2 py-0.5 rounded-full" style="background:var(--accent); color:var(--bg)">0</span>
+            </button>
+            <button data-tab="starred" class="tab btn px-3 py-1.5 rounded-lg">Starred</button>
+            <button data-tab="all" class="tab btn px-3 py-1.5 rounded-lg">All</button>
+            <div class="flex-1"></div>
+            <select id="channel" class="vq-input rounded-lg px-2 py-1.5 text-sm">
+              <option value="sms">SMS</option>
+              <option value="">All Channels</option>
+              <option value="fb">FB/IG</option>
+              <option value="ig">Instagram</option>
+              <option value="email">Email</option>
+            </select>
+          </div>
+          <input id="search" class="vq-input w-full rounded-lg px-3 py-2 text-sm" placeholder="Search name or phone…" />
+        </div>
+
+        <!-- List -->
+        <div id="list" class="flex-1 overflow-auto divide-y divide-[var(--border)]">
+          <!-- skeleton rows -->
+          <div class="px-4 py-3 flex items-start gap-3 skeleton">
+            <div class="h-8 w-8 rounded-xl bg-[#1e1e2a]"></div>
+            <div class="flex-1 min-w-0">
+              <div class="h-3 w-40 rounded bg-[#1e1e2a] mb-2"></div>
+              <div class="h-3 w-3/4 rounded bg-[#1e1e2a]"></div>
+            </div>
+          </div>
+          <div class="px-4 py-3 flex items-start gap-3 skeleton">
+            <div class="h-8 w-8 rounded-xl bg-[#1e1e2a]"></div>
+            <div class="flex-1 min-w-0">
+              <div class="h-3 w-48 rounded bg-[#1e1e2a] mb-2"></div>
+              <div class="h-3 w-2/3 rounded bg-[#1e1e2a]"></div>
+            </div>
+          </div>
+          <div class="px-4 py-3 flex items-start gap-3 skeleton">
+            <div class="h-8 w-8 rounded-xl bg-[#1e1e2a]"></div>
+            <div class="flex-1 min-w-0">
+              <div class="h-3 w-56 rounded bg-[#1e1e2a] mb-2"></div>
+              <div class="h-3 w-1/2 rounded bg-[#1e1e2a]"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Pager -->
+        <div class="px-4 py-3 border-t border-[var(--border)] flex items-center justify-between">
+          <button id="prev" class="btn px-3 py-1.5 rounded-lg text-sm disabled:opacity-50">Prev</button>
+          <div class="text-[11px] text-[var(--muted)]">Page <span id="page">1</span> / <span id="pages">1</span> • <span id="total">0</span> total</div>
+          <button id="next" class="btn px-3 py-1.5 rounded-lg text-sm disabled:opacity-50">Next</button>
+        </div>
+      </section>
+
+      <!-- Right: Thread placeholder -->
+      <section class="col-span-12 lg:col-span-8 vq-card rounded-2xl p-6 overflow-hidden flex flex-col">
+        <div class="flex items-center justify-between pb-4 border-b border-[var(--border)]">
+          <div class="font-semibold">Contact</div>
+          <div class="text-[12px] text-[var(--muted)]">Thread will load here</div>
+        </div>
+        <div class="flex-1 flex items-center justify-center text-[var(--muted)]">
+          Select a conversation to view the thread.
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <!-- App (ESM) -->
+  <script type="module">
+    import "/assets/widgets/spinner.js";
+    import "/assets/widgets/toast.js";
+    import "/assets/widgets/infiniteList.js";
+    import "/assets/js/app.js";
+  </script>
+</body>
+</html>
