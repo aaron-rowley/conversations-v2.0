@@ -1,5 +1,4 @@
 /* BEGIN FILE: assets/js/api.js */
-// Tiny helpers
 export const esc = s => String(s ?? "")
   .replaceAll("&", "&amp;")
   .replaceAll("<", "&lt;")
@@ -16,30 +15,16 @@ export const timeAgo = (iso) => {
   return `${(diff/86400|0)}d`;
 };
 
-/**
- * Returns a poster that:
- *  - Builds headers (Content-Type + optional auth header)
- *  - Resolves relative/absolute listUrl
- *  - POSTs JSON and parses JSON response (4xx/5xx throw)
- */
 export function makePoster(cfg) {
   const base = (cfg.apiBase || "").replace(/\/+$/, "");
-  const buildUrl = (u) => {
-    if (!u) return "";
-    // absolute?
-    if (/^https?:\/\//i.test(u)) return u;
-    if (base) return `${base}${u.startsWith("/") ? "" : "/"}${u}`;
-    return u;
-  };
+  const buildUrl = (u) => /^https?:\/\//i.test(u) ? u : (base ? `${base}${u.startsWith("/")?"":"/"}${u}` : u);
 
   return async function postJSON(url, body) {
     const endpoint = buildUrl(url);
     const headers = { "Content-Type": "application/json" };
 
-    // Only add auth header if provided
-    if (cfg.authHeader && cfg.authToken) {
-      headers[cfg.authHeader] = cfg.authToken;
-    }
+    if (cfg.authHeader && cfg.authToken) headers[cfg.authHeader] = cfg.authToken;
+    if (cfg.locationHeader && cfg.locationId) headers[cfg.locationHeader] = cfg.locationId;
 
     const res = await fetch(endpoint, {
       method: "POST",
