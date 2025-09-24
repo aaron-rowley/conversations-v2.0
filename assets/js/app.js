@@ -67,20 +67,22 @@ function load(pageArg, opts = { append: false }){
 // END load()
 
 
-// Events
+// BEGIN Events (replace entire block)
 view.els.tabs.forEach(el=>{
   el.addEventListener("click", ()=>{
     state.tab = el.dataset.tab;
     view.activeTabTo(state.tab);
     state.page = 1;
-    load(state.page);
+    state.items = [];
+    load(state.page, { append: false });
   });
 });
 
 view.els.channel.addEventListener("change", e=>{
   state.channel = e.target.value;
   state.page = 1;
-  load(state.page);
+  state.items = [];
+  load(state.page, { append: false });
 });
 
 let t;
@@ -89,9 +91,11 @@ view.els.search.addEventListener("input", e=>{
   t = setTimeout(()=>{
     state.q = (e.target.value || "").trim();
     state.page = 1;
-    load(state.page);
+    state.items = [];
+    load(state.page, { append: false });
   }, 250);
 });
+// END Events
 
 view.els.prev.onclick  = ()=> { if(state.page > 1)                load(--state.page); };
 view.els.next.onclick  = ()=> { if(state.page < state.totalPages)  load(++state.page); };
