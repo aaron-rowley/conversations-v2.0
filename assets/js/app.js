@@ -1,5 +1,13 @@
 import { getConfig } from "./config.js";
 import { makePoster } from "./api.js";
+
+// BEGIN mock switch
+const cfg = getConfig();
+const postJSON = cfg.useMock
+  ? async (_url, _body) => (await fetch("./assets/mock/list.json")).json()
+  : makePoster(cfg);
+// END mock switch
+
 import { bindListView } from "./listView.js";
 // widgets (already uploaded)
 import "../widgets/spinner.js";
