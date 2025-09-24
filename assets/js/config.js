@@ -6,7 +6,7 @@ export function getConfig() {
     locationId: p.get("locationId") || "",
     authHeader: p.get("authHeader") || "Authorization",
     authToken: p.get("authToken") || "",
-    appKey:    p.get("appKey") || "",               // optional X-App-Key
+    appKey:    p.get("appKey") || "",               // optional X-App-Key 
     pageSize: +(p.get("pageSize") || 10),
     defaultTab: "unread",
     defaultChannel: "sms",
