@@ -1,23 +1,57 @@
-// Tiny fetch helper + escaping
-export const esc = s => String(s||"").replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[c]));
-export const timeAgo = iso => {
-  if(!iso) return "";
-  const t = Date.parse(iso), d = Math.max(0, Date.now()-t);
-  const m = Math.floor(d/60000), h = Math.floor(m/60), D = Math.floor(h/24);
-  if(m<1) return "now"; if(m<60) return `${m}m`; if(h<24) return `${h}h`; return `${D}d`;
+/* BEGIN FILE: assets/js/api.js */
+// Tiny helpers
+export const esc = s => String(s ?? "")
+  .replaceAll("&", "&amp;")
+  .replaceAll("<", "&lt;")
+  .replaceAll(">", "&gt;")
+  .replaceAll('"', "&quot;")
+  .replaceAll("'", "&#39;");
+
+export const timeAgo = (iso) => {
+  const d = new Date(iso);
+  const diff = (Date.now() - d.getTime()) / 1000;
+  if (diff < 60) return `${Math.max(1, diff|0)}s`;
+  if (diff < 3600) return `${(diff/60|0)}m`;
+  if (diff < 86400) return `${(diff/3600|0)}h`;
+  return `${(diff/86400|0)}d`;
 };
 
-export function makePoster(cfg){
-  const headers = {"Content-Type":"application/json"};
-  if (cfg.authToken) headers[cfg.authHeader] = cfg.authToken;
-  if (cfg.appKey) headers["X-App-Key"] = cfg.appKey;
+/**
+ * Returns a poster that:
+ *  - Builds headers (Content-Type + optional auth header)
+ *  - Resolves relative/absolute listUrl
+ *  - POSTs JSON and parses JSON response (4xx/5xx throw)
+ */
+export function makePoster(cfg) {
+  const base = (cfg.apiBase || "").replace(/\/+$/, "");
+  const buildUrl = (u) => {
+    if (!u) return "";
+    // absolute?
+    if (/^https?:\/\//i.test(u)) return u;
+    if (base) return `${base}${u.startsWith("/") ? "" : "/"}${u}`;
+    return u;
+  };
 
-  return function postJSON(url, body){
-    if (!url) throw new Error("Missing listUrl");
-    return fetch(url, {
-      method:"POST",
+  return async function postJSON(url, body) {
+    const endpoint = buildUrl(url);
+    const headers = { "Content-Type": "application/json" };
+
+    // Only add auth header if provided
+    if (cfg.authHeader && cfg.authToken) {
+      headers[cfg.authHeader] = cfg.authToken;
+    }
+
+    const res = await fetch(endpoint, {
+      method: "POST",
       headers,
-      body: JSON.stringify({ locationId: cfg.locationId, ...body }),
-    }).then(r=>{ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); });
+      body: JSON.stringify(body ?? {}),
+    });
+
+    if (!res.ok) {
+      const text = await res.text().catch(()=> "");
+      throw new Error(`HTTP ${res.status} ${res.statusText} ${text ? "- "+text.slice(0,200) : ""}`.trim());
+    }
+    return res.json();
   };
 }
+/* END FILE: assets/js/api.js */
