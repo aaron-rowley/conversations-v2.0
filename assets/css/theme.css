@@ -1,0 +1,19 @@
+:root{
+  --bg:#0b0b10; --card:#121218; --border:#1c1c25;
+  --text:#e9e9f2; --muted:#a0a6b3; --accent:#ff7a00;
+}
+
+body{ background:var(--bg); color:var(--text) }
+.vq-card{ background:var(--card); border:1px solid var(--border) }
+.vq-input{ background:#151522; border:1px solid var(--border); color:var(--text) }
+.btn{ border:1px solid var(--border); background:#151522; color:var(--text); transition:transform .06s ease }
+.btn:active{ transform:translateY(1px) }
+
+/* skeleton shimmer */
+.skeleton{ position:relative; overflow:hidden; }
+.skeleton::after{
+  content:""; position:absolute; inset:0; transform:translateX(-100%);
+  background:linear-gradient(90deg, transparent, rgba(255,255,255,.06), transparent);
+  animation:shimmer 1.4s infinite;
+}
+@keyframes shimmer{100%{transform:translateX(100%)}}
