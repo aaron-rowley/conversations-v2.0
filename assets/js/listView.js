@@ -56,3 +56,4 @@ export function bindListView(root, onRowClick){
 
   return { els, renderItems, setPager, setUnreadBadge, activeTabTo };
 }
+
