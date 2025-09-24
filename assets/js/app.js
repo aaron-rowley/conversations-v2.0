@@ -10,7 +10,6 @@ import "../widgets/infiniteList.js";
 // Config + network poster (mock switch)
 const cfg = getConfig();
 const postJSON = cfg.useMock
-  // When mock=1, ignore the real URL and load static JSON
   ? async (_url, _body) => (await fetch("./assets/mock/list.json")).json()
   : makePoster(cfg);
 
@@ -45,7 +44,6 @@ function ensureSpinner() {
   el.style.justifyContent = "center";
   el.style.background = "rgba(0,0,0,0.25)";
   el.innerHTML = `<div class="animate-pulse px-3 py-1.5 rounded-lg border bg-[var(--bg-2)]">Loading…</div>`;
-  // assumes view.els.list is the scrollable list container wrapper
   const host = view?.els?.list?.parentElement || document.body;
   if (getComputedStyle(host).position === "static") host.style.position = "relative";
   host.appendChild(el);
@@ -55,7 +53,6 @@ function showSpinner(show = true) {
   const el = document.getElementById("list-loading");
   if (el) el.style.display = show ? "flex" : "none";
 }
-
 function renderEmpty(show = true, message = "No conversations found") {
   const id = "list-empty";
   let el = document.getElementById(id);
@@ -82,6 +79,47 @@ function syncURL() {
   u.searchParams.set("channel", state.channel);
   u.searchParams.set("q", state.q);
   history.replaceState(null, "", u);
+}
+
+// --- infinite scroll: persistent sentinel & single observer ---
+let io = null;
+let sentinel = null;
+function ensureInfiniteScroll(hasMore) {
+  if (!view?.els?.list) return;
+
+  // (re)create sentinel
+  if (!sentinel) {
+    sentinel = document.createElement("div");
+    sentinel.id = "infinite-sentinel";
+    sentinel.style.height = "1px";
+  }
+  // renderItems may wipe children; always re-append to the list
+  if (sentinel.parentElement !== view.els.list) {
+    view.els.list.appendChild(sentinel);
+  }
+
+  // create observer once
+  if (!io) {
+    io = new IntersectionObserver(
+      (entries) => {
+        const hit = entries.some((e) => e.isIntersecting);
+        if (!hit) return;
+        if (state.loading) return;
+        if (state.page >= state.totalPages) return;
+        load(state.page + 1, { append: true });
+      },
+      {
+        // If your list is not the scroll container, change root to null.
+        root: view.els.list,
+        rootMargin: "0px 0px 400px 0px",
+        threshold: 0,
+      }
+    );
+    io.observe(sentinel);
+  }
+
+  // show/hide sentinel based on hasMore
+  sentinel.style.display = hasMore ? "block" : "none";
 }
 
 // BEGIN load() with spinner + append + empty handling
@@ -115,24 +153,25 @@ function load(pageArg, opts = { append: false }) {
       view.setUnreadBadge(unread);
       view.setPager({ page: state.page, totalPages: state.totalPages, total: state.total });
 
-      // Control buttons + sentinel using hasMore
+      // Control buttons
       if (view?.els?.next) view.els.next.disabled = !data.hasMore;
       if (view?.els?.prev) view.els.prev.disabled = state.page <= 1;
-      const sentinel = document.getElementById("infinite-sentinel");
-      if (sentinel) sentinel.style.display = data.hasMore ? "block" : "none";
+
+      // Keep sentinel alive after each render
+      ensureInfiniteScroll(Boolean(data.hasMore));
 
       state.empty = state.items.length === 0;
       renderEmpty(state.empty);
     })
     .catch((err) => {
       console.error(err);
-      // No pop-up; show gentle empty
       state.items = [];
       state.empty = true;
       view.renderItems([]);
       view.setPager({ page: 1, totalPages: 1, total: 0 });
       if (view?.els?.next) view.els.next.disabled = true;
       if (view?.els?.prev) view.els.prev.disabled = true;
+      ensureInfiniteScroll(false);
       renderEmpty(true, "No conversations found");
     })
     .finally(() => {
@@ -141,37 +180,6 @@ function load(pageArg, opts = { append: false }) {
     });
 }
 // END load()
-
-// OPTIONAL: IntersectionObserver infinite scroll
-function attachInfiniteScroll() {
-  if (!view?.els?.list) return;
-
-  const sentinelId = "infinite-sentinel";
-  if (!document.getElementById(sentinelId)) {
-    const sentinel = document.createElement("div");
-    sentinel.id = sentinelId;
-    sentinel.style.height = "1px";
-    view.els.list.appendChild(sentinel);
-  }
-  const sentinel = document.getElementById(sentinelId);
-
-  const io = new IntersectionObserver(
-    (entries) => {
-      const hit = entries.some((e) => e.isIntersecting);
-      if (!hit) return;
-      if (state.loading) return;
-      if (state.page >= state.totalPages) return;
-      load(state.page + 1, { append: true });
-    },
-    {
-      root: view.els.list,
-      rootMargin: "0px 0px 400px 0px",
-      threshold: 0,
-    }
-  );
-
-  io.observe(sentinel);
-}
 
 // BEGIN Events (reset items on filter/search)
 view.els.tabs.forEach((el) => {
@@ -214,6 +222,5 @@ view.els.refresh.onclick = () => load(state.page, { append: false });
 // First paint
 view.activeTabTo(state.tab);
 view.els.channel.value = state.channel;
-attachInfiniteScroll();   // comment out if you only want buttons
 load(1);
 /* END FILE: assets/js/app.js */
