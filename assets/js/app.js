@@ -21,6 +21,7 @@ const state = {
   page: 1,
   totalPages: 1,
   loading: false,
+  items: [],         // 👈 keep an in-memory list for appending
 };
 
 const root = document;
@@ -29,8 +30,9 @@ const view = bindListView(root, (row)=> {
   console.log("open thread", row.id);
 });
 
-function load(pageArg){
-  if(state.loading) return;
+// BEGIN load() with append support
+function load(pageArg, opts = { append: false }){
+  if (state.loading) return;
   state.loading = true;
 
   postJSON(cfg.listUrl, {
@@ -39,18 +41,22 @@ function load(pageArg){
     q: state.q,
     page: pageArg,
     pageSize: cfg.pageSize,
-    // 👇 ensure backend receives location
     locationId: cfg.locationId || null
   })
   .then(data=>{
     state.page = data.page || pageArg;
     state.totalPages = Math.max(1, data.totalPages || Math.ceil((data.total||0)/(data.perPage||cfg.pageSize)));
-    view.renderItems(data.items || []);
+
+    const newItems = Array.isArray(data.items) ? data.items : [];
+    state.items = opts.append ? state.items.concat(newItems) : newItems;
+
+    view.renderItems(state.items);
+
     const unread = data.countsByChannel
       ? Object.values(data.countsByChannel).reduce((a,b)=>a+b,0)
-      : (data.items||[]).length;
+      : state.items.length;
     view.setUnreadBadge(unread);
-    view.setPager({ page: state.page, totalPages: state.totalPages, total: data.total||0 });
+    view.setPager({ page: state.page, totalPages: state.totalPages, total: data.total||state.items.length });
   })
   .catch(err=>{
     console.error(err);
@@ -58,6 +64,8 @@ function load(pageArg){
   })
   .finally(()=> state.loading = false);
 }
+// END load()
+
 
 // Events
 view.els.tabs.forEach(el=>{
