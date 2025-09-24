@@ -6,6 +6,9 @@
   <title>VisQuanta — Conversations v2</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="/assets/css/theme.css" />
+
+  <!-- Widget Script -->
+  <script type="module" src="/assets/js/widget.js"></script>
 </head>
 <body class="min-h-screen">
   <main class="h-screen w-full p-4">
@@ -42,47 +45,43 @@
 
         <!-- List -->
         <div id="list" class="flex-1 overflow-auto divide-y divide-[var(--border)]">
-          <!-- skeleton rows -->
-          <div class="px-4 py-3 flex items-start gap-3 skeleton">
-            <div class="h-8 w-8 rounded-xl bg-[#1e1e2a]"></div>
-            <div class="flex-1 min-w-0">
-              <div class="h-3 w-40 rounded bg-[#1e1e2a] mb-2"></div>
-              <div class="h-3 w-3/4 rounded bg-[#1e1e2a]"></div>
-            </div>
-          </div>
-          <div class="px-4 py-3 flex items-start gap-3 skeleton">
-            <div class="h-8 w-8 rounded-xl bg-[#1e1e2a]"></div>
-            <div class="flex-1 min-w-0">
-              <div class="h-3 w-48 rounded bg-[#1e1e2a] mb-2"></div>
-              <div class="h-3 w-2/3 rounded bg-[#1e1e2a]"></div>
-            </div>
-          </div>
-          <div class="px-4 py-3 flex items-start gap-3 skeleton">
-            <div class="h-8 w-8 rounded-xl bg-[#1e1e2a]"></div>
-            <div class="flex-1 min-w-0">
-              <div class="h-3 w-56 rounded bg-[#1e1e2a] mb-2"></div>
-              <div class="h-3 w-1/2 rounded bg-[#1e1e2a]"></div>
-            </div>
-          </div>
+          <!-- rows injected by widget.js -->
         </div>
 
         <!-- Pager -->
         <div class="px-4 py-3 border-t border-[var(--border)] flex items-center justify-between">
           <button id="prev" class="btn px-3 py-1.5 rounded-lg text-sm disabled:opacity-50">Prev</button>
-          <div class="text-[11px] text-[var(--muted)]">Page <span id="page">1</span> / <span id="pages">1</span> • <span id="total">0</span> total</div>
+          <div class="text-[11px] text-[var(--muted)]">
+            Page <span id="page">1</span> / <span id="pages">1</span> • <span id="total">0</span> total
+          </div>
           <button id="next" class="btn px-3 py-1.5 rounded-lg text-sm disabled:opacity-50">Next</button>
         </div>
       </section>
 
-      <!-- Right: Thread placeholder -->
-      
-      <section class="col-span-12 lg:col-span-8 vq-card rounded-2xl p-6 overflow-hidden flex flex-col">
-        <div class="flex items-center justify-between pb-4 border-b border-[var(--border)]">
-          <div class="font-semibold">Contact</div>
-          <div class="text-[12px] text-[var(--muted)]">Thread will load here</div>
+      <!-- Right: Thread -->
+      <section class="col-span-12 lg:col-span-8 vq-card rounded-2xl flex flex-col overflow-hidden">
+        <!-- Header -->
+        <div id="threadHeader" class="flex items-center justify-between p-4 border-b border-[var(--border)] min-h-[52px]">
+          <div class="text-sm text-[var(--muted)]">Select a conversation to view the thread.</div>
+          <div class="flex items-center gap-2">
+            <button class="btn px-3 py-1.5 rounded-lg border">Call</button>
+            <button class="btn px-3 py-1.5 rounded-lg border">More</button>
+          </div>
         </div>
-        <div class="flex-1 flex items-center justify-center text-[var(--muted)]">
-          Select a conversation to view the thread.
+
+        <!-- Messages -->
+        <div id="thread" class="flex-1 overflow-auto px-4 py-3 bg-[var(--bg-2)]">
+          <div class="text-sm text-[var(--muted)]">Thread will load here</div>
+        </div>
+
+        <!-- Composer -->
+        <div class="border-t bg-white p-3">
+          <div class="flex items-center gap-2">
+            <input id="composer" disabled
+              placeholder="Select a conversation…"
+              class="flex-1 px-3 py-2 rounded-xl border disabled:bg-[var(--bg-2)]" />
+            <button id="send" class="px-3 py-2 rounded-xl border" disabled>Send</button>
+          </div>
         </div>
       </section>
     </div>
