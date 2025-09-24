@@ -2,9 +2,9 @@ import { getConfig } from "./config.js";
 import { makePoster } from "./api.js";
 import { bindListView } from "./listView.js";
 // widgets (already uploaded)
-import "/assets/widgets/spinner.js";
-import "/assets/widgets/toast.js";
-import "/assets/widgets/infiniteList.js";
+import "../widgets/spinner.js";
+import "../widgets/toast.js";
+import "../widgets/infiniteList.js";
 
 const cfg = getConfig();
 const postJSON = makePoster(cfg);
