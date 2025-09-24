@@ -1,1 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>VisQuanta — Conversations</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root{
+      --bg:#0b0b10; --card:#121218; --border:#1c1c25;
+      --text:#e9e9f2; --muted:#a0a6b3; --accent:#ff7a00;
+    }
+    body{ background:var(--bg); color:var(--text); }
+    .card{ background:var(--card); border:1px solid var(--border) }
+    .btn{ background:#151522; border:1px solid var(--border) }
+    .input{ background:#151522; border:1px solid var(--border) }
+    .row-skel{ animation:pulse 1.2s ease-in-out infinite; }
+    @keyframes pulse{0%{opacity:.5}50%{opacity:.15}100%{opacity:.5}}
+  </style>
+</head>
+<body class="min-h-screen">
+  <main class="max-w-3xl mx-auto p-4">
+    <section class="card rounded-2xl overflow-hidden">
+      <!-- Header -->
+      <div class="px-4 py-3 flex items-center justify-between border-b border-[var(--border)]">
+        <div class="font-semibold">Conversations</div>
+        <button id="refresh" class="btn px-3 py-1.5 rounded-lg text-sm">Refresh</button>
+      </div>
 
+      <!-- Controls (blank-first UI; all wired, no data yet) -->
+      <div class="px-4 pt-3 pb-2 space-y-3">
+        <div class="flex items-center gap-2 text-sm">
+          <button data-tab="unread" class="tab px-3 py-1.5 rounded-lg btn">Unread <span id="badge-unread" class="ml-2 text-[10px] px-2 py-0.5 rounded-full" style="background:var(--accent); color:var(--bg)">0</span></button>
+          <button data-tab="starred" class="tab px-3 py-1.5 rounded-lg btn">Starred</button>
+          <button data-tab="all" class="tab px-3 py-1.5 rounded-lg btn">All</button>
+          <div class="flex-1"></div>
+          <select id="channel" class="input rounded-lg px-2 py-1.5 text-sm">
+            <option value="">All Channels</option>
+            <option value="sms">SMS</option>
+            <option value="fb">FB</option>
+            <option value="ig">IG</option>
+            <option value="email">Email</option>
+          </select>
+        </div>
+        <input id="search" class="input w-full rounded-lg px-3 py-2 text-sm" placeholder="Search name or phone…"/>
+      </div>
+
+      <!-- Error (hidden by default) -->
+      <div id="error" class="px-4 text-sm text-red-400 hidden"></div>
+
+      <!-- List (starts skeleton, then data) -->
+      <div id="list" class="divide-y divide-[var(--border)]"></div>
+
+      <!-- Footer / Pagination -->
+      <div class="px-4 py-3 flex items-center justify-between border-t border-[var(--border)]">
+        <button id="prev" class="btn px-3 py-1.5 rounded-lg text-sm disabled:opacity-50">Prev</button>
+        <div class="text-[11px] text-[var(--muted)]">Page <span id="page">1</span> / <span id="pages">1</span> • <span id="total">0</span> total</div>
+        <button id="next" class="btn px-3 py-1.5 rounded-lg text-sm disabled:opacity-50">Next</button>
+      </div>
+    </section>
+  </main>
+
+<script>
+(function(){
+  // ------- Config from URL -------
+  const qs = new URLSearchParams(location.search);
+  const CFG = {
+    locationId: qs.get('locationId') || '',
+    listUrl: qs.get('listUrl'),
+    authHeader: qs.get('authHeader') || 'Authorization',
+    authToken: qs.get('authToken') || '',
+    pageSize: +(qs.get('pageSize') || 10),
+  };
+  // short-term app key (matches n8n)
+  const APP_KEY = 'app_dev_123456';
+
+  // ------- Elements -------
+  const listEl   = document.getElementById('list');
+  const errEl    = document.getElementById('error');
+  const searchEl = document.getElementById('search');
+  const chanEl   = document.getElementById('channel');
+  const prevEl   = document.getElementById('prev');
+  const nextEl   = document.getElementById('next');
+  const pageEl   = document.getElementById('page');
+  const pagesEl  = document.getElementById('pages');
+  const totalEl  = document.getElementById('total');
+  const refreshEl= document.getElementById('refresh');
+  const tabEls   = Array.from(document.querySelectorAll('.tab'));
+  const badgeUnread = document.getElementById('badge-unread');
+
+  // ------- State -------
+  let tab = 'unread';
+  let page = 1;
+  let totalPages = 1;
+  let total = 0;
+  let q = '';
+  let channel = '';
+  let loading = false;
+
+  // ------- Helpers -------
+  function headers(){
+    const h = {'Content-Type':'application/json','X-App-Key': APP_KEY};
+    if (CFG.authToken) h[CFG.authHeader] = CFG.authToken;
+    return h;
+  }
+  function postJSON(url, body){
+    return fetch(url, {
+      method:'POST',
+      headers: headers(),
+      body: JSON.stringify({ locationId: CFG.locationId, ...body })
+    }).then(r => { if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); });
+  }
+  const timeAgo = (iso) => {
+    if (!iso) return '';
+    const t = Date.parse(iso), diff = Math.max(0, Date.now()-t);
+    const m = Math.floor(diff/60000), h = Math.floor(m/60), d = Math.floor(h/24);
+    if (m < 1) return 'now';
+    if (m < 60) return `${m}m`;
+    if (h < 24) return `${h}h`;
+    return `${d}d`;
+  };
+  const esc = (s) => String(s||'').replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[c]));
+
+  // ------- Skeletons -------
+  function renderSkeleton(n=8){
+    listEl.innerHTML = '';
+    for(let i=0;i<n;i++){
+      const row = document.createElement('div');
+      row.className = 'px-4 py-3 flex items-start gap-3';
+      row.innerHTML = `
+        <div class="h-8 w-8 rounded-xl bg-[#202030] row-skel"></div>
+        <div class="flex-1 min-w-0 space-y-2">
+          <div class="h-4 w-1/3 bg-[#202030] rounded row-skel"></div>
+          <div class="h-3 w-2/3 bg-[#202030] rounded row-skel"></div>
+        </div>
+        <div class="h-4 w-6 bg-[#202030] rounded row-skel"></div>
+      `;
+      listEl.appendChild(row);
+    }
+  }
+
+  // ------- Render data -------
+  function renderItems(items){
+    listEl.innerHTML = '';
+    if (!items || !items.length){
+      const empty = document.createElement('div');
+      empty.className = 'px-4 py-10 text-center text-[var(--muted)]';
+      empty.textContent = q ? 'No results.' : 'No conversations.';
+      listEl.appendChild(empty);
+      return;
+    }
+    items.forEach(it=>{
+      const row = document.createElement('div');
+      row.className = 'px-4 py-3 flex items-start gap-3 hover:bg-[#161621] transition';
+      const initials = (it.initials || (it.name||'VQ').split(' ').slice(0,2).map(s=>s[0]?.toUpperCase()).join('')) || 'VQ';
+      row.innerHTML = `
+        <div class="h-8 w-8 rounded-xl flex items-center justify-center text-xs font-semibold" style="background:#202030">${esc(initials)}</div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center justify-between gap-3">
+            <div class="font-medium truncate">${esc(it.name || 'Conversation')}</div>
+            <div class="text-[10px] text-[var(--muted)] whitespace-nowrap">${esc(it.lastMessageAgo || timeAgo(it.lastMessageAt))}</div>
+          </div>
+          <div class="text-sm text-[var(--muted)] truncate">${esc(it.previewShort || it.preview || '')}</div>
+        </div>
+        ${it.unreadCount ? `<span class="ml-2 text-[10px] px-2 py-0.5 rounded-full" style="background:var(--accent); color:var(--bg)">${it.unreadCount}</span>` : ''}
+      `;
+      listEl.appendChild(row);
+    });
+  }
+
+  // ------- Load flow -------
+  function load(pageArg){
+    if (loading) return;
+    loading = true;
+    errEl.classList.add('hidden');
+    renderSkeleton(8); // blank-first UX
+
+    postJSON(CFG.listUrl, { tab, page: pageArg, pageSize: CFG.pageSize, q, channel })
+      .then(data=>{
+        page        = data.page || pageArg;
+        totalPages  = Math.max(1, data.totalPages || Math.ceil((data.total||0)/(data.perPage||CFG.pageSize)));
+        total       = data.total || 0;
+        const unreadCount = (data.countsByChannel ? Object.values(data.countsByChannel).reduce((a,b)=>a+b,0) : data.items?.length) || 0;
+        badgeUnread.textContent = unreadCount;
+
+        renderItems(data.items || []);
+        pageEl.textContent  = String(page);
+        pagesEl.textContent = String(totalPages);
+        totalEl.textContent = String(total);
+        prevEl.disabled = page <= 1;
+        nextEl.disabled = page >= totalPages;
+      })
+      .catch(err=>{
+        listEl.innerHTML = '';
+        errEl.textContent = err.message || 'Failed to load';
+        errEl.classList.remove('hidden');
+      })
+      .finally(()=> loading = false);
+  }
+
+  // ------- Wire events -------
+  tabEls.forEach(el=>{
+    el.addEventListener('click', ()=>{
+      tabEls.forEach(x=>x.classList.remove('ring-1','ring-[var(--accent)]'));
+      el.classList.add('ring-1','ring-[var(--accent)]');
+      tab = el.dataset.tab;
+      page = 1;
+      load(page);
+    });
+  });
+  let tSearch;
+  searchEl.addEventListener('input', e=>{
+    clearTimeout(tSearch);
+    tSearch = setTimeout(()=>{
+      q = (e.target.value||'').trim();
+      page = 1;
+      load(page);
+    }, 200);
+  });
+  chanEl.addEventListener('change', e=>{
+    channel = e.target.value;
+    page = 1;
+    load(page);
+  });
+  document.getElementById('prev').onclick = ()=> { if(page>1) load(--page); };
+  document.getElementById('next').onclick = ()=> { if(page<totalPages) load(++page); };
+  refreshEl.onclick = ()=> load(page);
+
+  // ------- Boot -------
+  // paint blank chrome instantly, then fetch
+  load(1);
+})();
+</script>
+</body>
+</html>
